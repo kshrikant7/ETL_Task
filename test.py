@@ -125,6 +125,44 @@ def get_weather(lat, lon):
         print(f"Error: {e}")
         return None
 
+# Fetch station data   
+def fetch_station_data(combined_data):
+    url = "https://www.cleartrip.com/trains/stations/list"
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Find the table with the station data
+    table = soup.find('table')
+
+    # Get the tbody element in the table
+    tbody = table.find('tbody')
+
+    # Get all rows in the table
+    rows = tbody.find_all('tr')
+
+    city_name = combined_data['city_name']
+
+    for row in rows:
+        # Get all columns in the row
+        cols = row.find_all('td')
+
+        # Get the station name from the first column
+        city = cols[2].text.strip()
+
+        # If the station name is a city in combined_data, add the station details to that city's data
+        if city == city_name:
+            # Get the station details from the other columns
+            station_details = {
+                'code': cols[0].text.strip(),
+                'station_name': cols[1].text.strip(),
+                'city': cols[2].text.strip()
+            }
+
+            # Add the station details to the city's data
+            combined_data['station_data'] = station_details
+            break
+    return combined_data
+
 # Main function to execute ETL pipeline
 if __name__ == "__main__":
     # Scrape city data from Wikipedia
