@@ -1,5 +1,6 @@
 import requests, os, json
 from bs4 import BeautifulSoup
+import mysql.connector
 
 WIKIPEDIA_URL = "https://en.wikipedia.org/wiki/List_of_cities_in_India_by_population"
 LAT_LONG_URL = ["https://www.latlong.net/category/cities-102-15.html",
@@ -88,13 +89,13 @@ def combine_data(cities_data, geo_data, train_data):
             combined_data[city_name]['longitude'] = longitude
 
     # Add the Train Station data to the combined_data dictionary
-            for city in train_data:
-                city_name = city['city_name']
-                train_station = city['station_name']
-                code = city['code']
-                if city_name in combined_data:
-                    combined_data[city_name]['train_station'] = train_station
-                    combined_data[city_name]['code'] = code
+    for city in train_data:
+        city_name = city['city_name']
+        train_station = city['station_name']
+        code = city['code']
+        if city_name in combined_data:
+            combined_data[city_name]['train_station'] = train_station
+            combined_data[city_name]['code'] = code
 
 
     # combined_data = {city: data for city, data in combined_data.items() if 'population' in data and 'latitude' in data and 'longitude' in data}
@@ -108,11 +109,12 @@ def combine_data(cities_data, geo_data, train_data):
 #Get Weather Data
 def get_weather(lat, lon):
     # Define OpenWeather API key
-    # api_key = ''
-    # api_key = os.getenv('OPENWEATHER_API_KEY')
+    
+    api_key = os.getenv('OPENWEATHER_API_KEY')
 
     try:
-        # Make a GET request to the OpenWeather API
+        # Make a GET request to the OpenWeather API        s.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1'})
+
         response = requests.get(f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}")
 
         # Check if the request was successful
@@ -213,5 +215,76 @@ if __name__ == "__main__":
             print(f"Code: {data['code']}")  
             print()
 
-    # Print the length of the combined data
-    print(len(combined_data))
+
+
+# Function to save data to MySQL
+def save_to_mysql(data):
+    # Establish a connection to the MySQL server
+    try:
+        connection = mysql.connector.connect(
+            host="localhost",
+            user="Enter Username",
+            password="Enter PAssword",
+            database="Enter Database"
+        )
+
+        if connection.is_connected():
+            cursor = connection.cursor()
+
+            # Create a table if it doesn't exist
+            create_table_query = """
+            CREATE TABLE IF NOT EXISTS city_data (
+                city_id INT PRIMARY KEY,
+                city_name VARCHAR(255),
+                population BIGINT,
+                latitude FLOAT,
+                longitude FLOAT,
+                temperature FLOAT,
+                humidity FLOAT,
+                wind_speed FLOAT,
+                weather_conditions VARCHAR(255),
+                train_station VARCHAR(255),
+                code VARCHAR(255)
+            );
+            """
+            cursor.execute(create_table_query)
+
+            # Insert data into the table
+            # Insert data into the table
+            for city, data in combined_data.items():
+                if 'city_id' in data:
+                    insert_query = """
+                    INSERT INTO city_data (city_id, city_name, population, latitude, longitude, temperature, humidity, wind_speed, weather_conditions, train_station, code)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    """
+                    # Preprocess population to remove non-numeric characters
+                    population = ''.join(filter(str.isdigit, data['population']))  # Remove non-numeric characters from population
+                    cursor.execute(insert_query, (
+                        data['city_id'],
+                        city,
+                        int(population) if population else None,  # Convert processed population to integer
+                        data['latitude'],
+                        data['longitude'],
+                        data['temperature'],
+                        data['humidity'],
+                        data['wind_speed'],
+                        data['weather_conditions'],
+                        data['train_station'],
+                        data['code']
+                    ))
+                    connection.commit()  # Commit changes after each insertion
+
+
+
+
+    except mysql.connector.Error as error:
+        print("Error while connecting to MySQL", error)
+
+    finally:
+        if 'connection' in locals():
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+
+# Call the function to save data to MySQL
+save_to_mysql(combined_data)
